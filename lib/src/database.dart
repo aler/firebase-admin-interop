@@ -40,6 +40,17 @@ class Database {
       new Reference(nativeInstance.refFromURL(url));
 }
 
+class Event {
+  /// The [DataSnapshot] representing the new value.
+  final DataSnapshot snapshot;
+
+  /// The key of the previous child.
+  final String prevChild;
+
+  /// Creates a new event
+  Event(this.snapshot, this.prevChild);
+}
+
 /// Sorts and filters the data at a [Database] location so only a subset of the
 /// child data is included.
 ///
@@ -144,6 +155,45 @@ class Query {
   /// child_removed events for each item that drops out of the active list so
   /// that the total number stays at 100.
   Query limitToLast(int limit) => new Query(nativeInstance.limitToLast(limit));
+
+  Stream<Event> on(String eventType) {
+    StreamController<Event> controller;
+
+    void onCallback(js.DataSnapshot snapshot) {
+      print('snapshot: ${snapshot.val()}');
+      final ds = DataSnapshot(snapshot);
+      final event = Event(ds, null);
+      controller.add(event);
+    }
+
+    void onListen() {
+      if (controller.isClosed) {
+        print('onListen: stream is closed');
+        return;
+      }
+      nativeInstance.on(eventType, allowInterop(onCallback));
+    }
+
+    void onCancel() {
+      print('onCancel');
+      nativeInstance.off('value', allowInterop(onCallback));
+      if (controller != null) {
+        controller.close();
+      }
+    }
+
+    void unsupported() {
+      throw UnsupportedError('oops!!');
+    }
+
+    controller = StreamController<Event>(
+        onListen: onListen,
+        onPause: unsupported,
+        onResume: unsupported,
+        onCancel: onCancel);
+
+    return controller.stream;
+  }
 
   /// Listens for exactly one event of the specified [eventType], and then stops
   /// listening.
